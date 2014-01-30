@@ -21,7 +21,9 @@
 
  This joke is originally from Rob Faludi: Wireless is a pointless way to describe wireless. 
  It only describes what wireless is not, not what it is. For example, it also has no tomatoes, 
- so it could be described as 'tomatoless'. This is the tomatoless bootloader.
+ so it could be described as 'tomatoless'. 
+ 
+ This is the tomatoless bootloader.
 */
 
 /*
