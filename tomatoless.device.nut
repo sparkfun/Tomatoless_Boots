@@ -1,33 +1,21 @@
 /*
- Tomatoless Boots: Wireless bootloader for Arduino + Electric Imp
- By: Original code by Aron, mods by Nathan Seidle
- SparkFun Electronics
- Date: January 29th, 2014
- License: See MIT below
- 
- This code allows an Arduino to be reprogrammed over the web (anywhere in the world!)
- using an Electric Imp. 
+Code originally from Aron Steg: http://forums.electricimp.com/discussion/comment/7904
+Modified February 1st, 2014 by Nathan Seidle
 
- Zomg thank you Aron for writing the original code : http://forums.electricimp.com/discussion/comment/7904
+This code was modified slightly to work with the Electric Imp Shield 
+from SparkFun: https://www.sparkfun.com/products/11401
+The reset control was inverted and status LEDs re-routed but everything else was the same.
+Zomg thank you Aron Steg: http://forums.electricimp.com/discussion/comment/7904
 
- There are two bits of code to load onto the Imp, the device and agent. Two hardware modifications are required to
- work with the Electric Imp Shield from SparkFun: https://www.sparkfun.com/products/11401 :
- * Cut two RX/TX traces to 8/9 on the back of the Imp Shield then solder blob to 0/1
- * Wire from P1 of Imp to RST on shield.
+Two hardware modifications are required:
 
- Bootload time was also dramatically improved. Originally it took 6.812 seconds
- for 2514 bytes. With a modification to SERIAL_READ to check for characters received
- it takes 0.766 seconds to bootload 2514 bytes.
+* Cut two RX/TX traces to 8/9 on the back of the Imp Shield then solder blob to 0/1
+* Wire from P1 of Imp to RST on shield.
 
- This joke is originally from Rob Faludi: Wireless is a pointless way to describe wireless. 
- It only describes what wireless is not, not what it is. For example, it also has no tomatoes, 
- so it could be described as 'tomatoless'. 
- 
- This is the tomatoless bootloader.
-*/
+It takes the Arduino approximately 400ms from reset going high to be able to 
+respond to incoming bootload commands.
 
-/*
-Original author of this code was Aron (https://github.com/blindman2k). Here's the original license.
+Original license:
 
 The MIT License (MIT)
 
@@ -210,7 +198,7 @@ function execute(command = null, param = null, response_length = 100, response_t
     
     local resp_buffer = SERIAL_READ(response_length+2, response_timeout);
     //server.log("Received: " + HEXDUMP(resp_buffer));
-    
+
     assert(resp_buffer != null);
     assert(resp_buffer.tell() >= 2);
     assert(resp_buffer[0] == STK_INSYNC);
@@ -225,14 +213,14 @@ function execute(command = null, param = null, response_length = 100, response_t
 
 //------------------------------------------------------------------------------------------------------------------------------
 function check_duino() {
-    local startTime = hardware.millis.bindenv(hardware)();
+    //local startTime = hardware.millis.bindenv(hardware)();
 
     // Clear the read buffer
-    SERIAL_READ(100, 50); //Takes 102ms unless we limit it. 50ms seems to work.
-    server.log("Check_duino time1: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
+    SERIAL_READ(100, 1); //Max timeout of 1ms
+    //server.log("Check_duino time1: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
     
     // Check everything we can check to ensure we are speaking to the correct boot loader
-    local major = execute(STK_GET_PARAMETER, 0x81, 1); //Takes the max 100ms - not sure why
+    local major = execute(STK_GET_PARAMETER, 0x81, 1); //Takes 1ms
     local minor = execute(STK_GET_PARAMETER, 0x82, 1); //Takes 2ms
     local invalid = execute(STK_GET_PARAMETER, 0x83, 1); //Takes 1ms
     local signature = execute(STK_READ_SIGN, null, 3); //Takes 1ms
@@ -241,7 +229,7 @@ function check_duino() {
     assert(invalid.len() == 1 && invalid[0] == 0x03);
     assert(signature.len() == 3 && signature[0] == 0x1E && signature[1] == 0x95 && signature[2] == 0x0F); //This is the unique signature for the ATmega328
         
-    server.log("Check_duino time2: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
+    //server.log("Check_duino time2: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
 }
 
 
@@ -252,8 +240,8 @@ function program_duino(address16, data) {
     local addr8_lo = address16 & 0xFF;
     local data_len = data.len();
     
-    execute(STK_LOAD_ADDRESS, [addr8_lo, addr8_hi], 0); //Takes 302ms
-    execute(STK_PROG_PAGE, [0x00, data_len, 0x46, data], 0); //Takes 320ms
+    execute(STK_LOAD_ADDRESS, [addr8_lo, addr8_hi], 0);
+    execute(STK_PROG_PAGE, [0x00, data_len, 0x46, data], 0);
 
     //This is a step to verify the code is correctly written to ATmega
     //This doubles the time it takes to program the Arduino
@@ -272,14 +260,14 @@ function bounce(callback = null) {
     // Bounce the reset pin
     server.log("Bouncing the Arduino reset pin");
 
-    imp.wakeup(0.5, function() {
+    imp.wakeup(0.1, function() {
         ACTIVITY.write(0); //Turn on LED
 
         RESET.write(0); //Reset Arduino
 
-        imp.wakeup(0.2, function() {
+        imp.wakeup(0.1, function() {
             RESET.write(1); //Return reset to high, bootloader on Arduino now begins
-            imp.wakeup(0.3, function() {
+            imp.wakeup(0.5, function() { //From logic analyzer, Arduino takes 440ms to respond to bootload command
                 check_duino();
 
                 ACTIVITY.write(1); //Turn off LED
@@ -288,6 +276,9 @@ function bounce(callback = null) {
             });
         });
     });
+
+    server.log("Bouncing complete");
+
 }
 
 //------------------------------------------------------------------------------------------------------------------------------

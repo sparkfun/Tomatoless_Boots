@@ -1,43 +1,37 @@
 /*
- Tomatoless Boots: Wireless bootloader for Arduino + Electric Imp
- By: Original code by Aron, mods by Nathan Seidle
- SparkFun Electronics
- Date: January 29th, 2014
- License: See MIT below
+Code originally from Aron Steg: http://forums.electricimp.com/discussion/comment/7904
+Modified February 1st, 2014 by Nathan Seidle
 
- This is the agent to server the HTML upload page and to pass the program to the device.
+Original license:
 
- Zomg thank you Aron for writing the original code : http://forums.electricimp.com/discussion/comment/7904
- Original author of this code was Aron (https://github.com/blindman2k). Here's the original license.
+The MIT License (MIT)
 
- The MIT License (MIT)
+Copyright (c) 2013 Electric Imp
 
- Copyright (c) 2013 Electric Imp
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 */
 
 server.log("Agent started, URL is " + http.agenturl());
 
-
 //------------------------------------------------------------------------------------------------------------------------------
 hex <- "";
+
 html <- @"<HTML>
 <BODY>
 
@@ -53,7 +47,6 @@ Step 3: Check out your impeeduino<br/>
 ";
 
 
-
 //------------------------------------------------------------------------------------------------------------------------------
 // Parses a HTTP POST in multipart/form-data format
 function parse_hexpost(req, res) {
@@ -62,13 +55,12 @@ function parse_hexpost(req, res) {
     local hstart = bindex + boundary.len();
     local bstart = req.body.find("\r\n\r\n", hstart) + 4;
     local fstart = req.body.find("\r\n\r\n--" + boundary + "--", bstart);
-    /*
-    server.log("Boundary = " + boundary);
+    
+    /*server.log("Boundary = " + boundary);
     server.log("Headers start at = " + hstart);
     server.log("Body start at = " + bstart);
-    server.log("Body finished at = " + fstart);
-    */
-    
+    server.log("Body finished at = " + fstart);*/
+
     return req.body.slice(bstart, fstart);
 }
 
@@ -163,7 +155,6 @@ http.onrequest(function (req, res) {
     if (req.method == "GET") {
         res.send(200, html);
     } else if (req.method == "POST") {
-
         if ("content-type" in req.headers) {
             if (req.headers["content-type"].slice(0, 19) == "multipart/form-data") {
                 hex = parse_hexpost(req, res);
