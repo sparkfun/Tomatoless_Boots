@@ -38,8 +38,8 @@ html <- @"<HTML>
 <form method='POST' enctype='multipart/form-data'>
 Program the ATmega328 via the Imp.<br/><br/>
 Step 1: Select an Intel HEX file to upload: <input type=file name=hexfile><br/>
-Step 2: <input type=submit value=Press> to upload the file.<br/>
-Step 3: Check out your impeeduino<br/>
+Step 2: <input type=submit value=Send> the file to the Arduino.<br/>
+Step 3: Check out your Arduino!<br/>
 </form>
 
 </BODY>
