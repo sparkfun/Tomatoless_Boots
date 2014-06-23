@@ -1,6 +1,7 @@
 /*
 Code originally from Aron Steg: http://forums.electricimp.com/discussion/comment/7904
 Modified February 1st, 2014 by Nathan Seidle
+Many great fixes were made by Aaron Steg, May 2014.
 
 This code was modified slightly to work with the Electric Imp Shield 
 from SparkFun: https://www.sparkfun.com/products/11401
@@ -17,27 +18,10 @@ respond to incoming bootload commands.
 
 Original license:
 
+Copyright (c) 2014 Electric Imp
 The MIT License (MIT)
+http://opensource.org/licenses/MIT
 
-Copyright (c) 2013 Electric Imp
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
 */
 
 server.log("Device started, impee_id " + hardware.getimpeeid() + " and mac = " + imp.getmacaddress() );
@@ -47,12 +31,13 @@ server.log("Device started, impee_id " + hardware.getimpeeid() + " and mac = " +
 SERIAL <- hardware.uart57;
 SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS);
 
-// Drive pin1 high for reset
+// Set pin1 high for normal operation
+// Set pin1 low to reset a standard Arduino
 RESET <- hardware.pin1;
 RESET.configure(DIGITAL_OUT);
 RESET.write(1); //Leave Arduino in normal (non-reset) state
 
-// Pin 9 is the yellow LED on the 
+// Pin 9 is the yellow LED on the Imp Shield
 ACTIVITY <- hardware.pin9;
 ACTIVITY.configure(DIGITAL_OUT);
 ACTIVITY.write(1);
@@ -99,7 +84,7 @@ const STK_PROG_FUSE       = 0x62;  // 'b'
 const STK_PROG_LOCK       = 0x63;  // 'c'
 const STK_PROG_PAGE       = 0x64;  // 'd'
 const STK_PROG_FUSE_EXT   = 0x65;  // 'e'
-const STK_READ_FLASH      = 0x70;  // 'p'
+const STK_READ_FLASH      = 0x70; // 'p'
 const STK_READ_DATA       = 0x71;  // 'q'
 const STK_READ_FUSE       = 0x72;  // 'r'
 const STK_READ_LOCK       = 0x73;  // 's'
@@ -128,33 +113,29 @@ function HEXDUMP(buf, len = null) {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-function SERIAL_READ(len = 100, timeout = 100) {
+function SERIAL_READ(len = 100, timeout = 300) {
     
-    //local startTime = hardware.millis.bindenv(hardware)();
-
     local rxbuf = blob(len);
-    local writen = rxbuf.writen.bindenv(rxbuf);
+    local write = rxbuf.writen.bindenv(rxbuf);
     local read = SERIAL.read.bindenv(SERIAL);
     local hw = hardware;
     local ms = hw.millis.bindenv(hw);
     local started = ms();
-    
+
     local charsRead = 0;
     LINK.write(0); //Turn LED on
     do {
         local ch = read();
         if (ch != -1) {
-            writen(ch, 'b')
+            write(ch, 'b')
             charsRead++;
             if(charsRead == len) break;
         }
     } while (ms() - started < timeout);
     LINK.write(1); //Turn LED off
-    
+
     // Clean up any extra bytes
     while (SERIAL.read() != -1);
-
-    //server.log("Serial Time: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
     
     if (rxbuf.tell() == 0) {
         return null;
@@ -165,7 +146,7 @@ function SERIAL_READ(len = 100, timeout = 100) {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-function execute(command = null, param = null, response_length = 100, response_timeout = 100) {
+function execute(command = null, param = null, response_length = 100, response_timeout = 300) {
     
     local send_buffer = null;
     if (command == null) {
@@ -193,12 +174,12 @@ function execute(command = null, param = null, response_length = 100, response_t
         send_buffer = format("%c%c%c", command, param, CRC_EOP);
     }
     
-    //server.log("Sending: " + HEXDUMP(send_buffer));
-    SERIAL.write(send_buffer); //Takes between 1 and 5 ms
+    // server.log("Sending: " + HEXDUMP(send_buffer));
+    SERIAL.write(send_buffer);
     
     local resp_buffer = SERIAL_READ(response_length+2, response_timeout);
-    //server.log("Received: " + HEXDUMP(resp_buffer));
-
+    // server.log("Received: " + HEXDUMP(resp_buffer));
+    
     assert(resp_buffer != null);
     assert(resp_buffer.tell() >= 2);
     assert(resp_buffer[0] == STK_INSYNC);
@@ -213,23 +194,18 @@ function execute(command = null, param = null, response_length = 100, response_t
 
 //------------------------------------------------------------------------------------------------------------------------------
 function check_duino() {
-    //local startTime = hardware.millis.bindenv(hardware)();
-
     // Clear the read buffer
-    SERIAL_READ(100, 1); //Max timeout of 1ms
-    //server.log("Check_duino time1: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
-    
+    SERIAL_READ(); 
+
     // Check everything we can check to ensure we are speaking to the correct boot loader
-    local major = execute(STK_GET_PARAMETER, 0x81, 1); //Takes 1ms
-    local minor = execute(STK_GET_PARAMETER, 0x82, 1); //Takes 2ms
-    local invalid = execute(STK_GET_PARAMETER, 0x83, 1); //Takes 1ms
-    local signature = execute(STK_READ_SIGN, null, 3); //Takes 1ms
-    assert(major.len() == 1 && major[0] == 0x04);
-    assert(minor.len() == 1 && minor[0] == 0x04);
+    local major = execute(STK_GET_PARAMETER, 0x81, 1);
+    local minor = execute(STK_GET_PARAMETER, 0x82, 1);
+    local invalid = execute(STK_GET_PARAMETER, 0x83, 1);
+    local signature = execute(STK_READ_SIGN);
+    assert(major.len() == 1 && minor.len() == 1);
+    assert((major[0] >= 5) || (major[0] == 4 && minor[0] >= 4));
     assert(invalid.len() == 1 && invalid[0] == 0x03);
-    assert(signature.len() == 3 && signature[0] == 0x1E && signature[1] == 0x95 && signature[2] == 0x0F); //This is the unique signature for the ATmega328
-        
-    //server.log("Check_duino time2: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
+    assert(signature.len() == 3 && signature[0] == 0x1E && signature[1] == 0x95 && signature[2] == 0x0F);
 }
 
 
@@ -241,64 +217,65 @@ function program_duino(address16, data) {
     local data_len = data.len();
     
     execute(STK_LOAD_ADDRESS, [addr8_lo, addr8_hi], 0);
-    execute(STK_PROG_PAGE, [0x00, data_len, 0x46, data], 0);
-
-    //This is a step to verify the code is correctly written to ATmega
-    //This doubles the time it takes to program the Arduino
-    //Not necessary in my opinion but uncomment if you are paranoid
-    /*local data_check = execute(STK_READ_PAGE, [0x00, data_len, 0x46], data_len)
+    execute(STK_PROG_PAGE, [0x00, data_len, 0x46, data], 0)
+    local data_check = execute(STK_READ_PAGE, [0x00, data_len, 0x46], data_len)
+    
     assert(data_check.len() == data_len);
     for (local i = 0; i < data_len; i++) {
         assert(data_check[i] == data[i]);
-    }*/
+    }
+
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-function bounce(callback = null) {
+function bounce() {
     
     // Bounce the reset pin
     server.log("Bouncing the Arduino reset pin");
-
-    imp.wakeup(0.1, function() {
-        ACTIVITY.write(0); //Turn on LED
-
-        RESET.write(0); //Reset Arduino
-
-        imp.wakeup(0.1, function() {
-            RESET.write(1); //Return reset to high, bootloader on Arduino now begins
-            imp.wakeup(0.5, function() { //From logic analyzer, Arduino takes 440ms to respond to bootload command
-                check_duino();
-
-                ACTIVITY.write(1); //Turn off LED
-                
-                if (callback) callback();
-            });
-        });
-    });
-
-    server.log("Bouncing complete");
-
+    imp.sleep(0.5);
+    ACTIVITY.write(0); //Turn on LED
+    RESET.write(0); //Reset Arduino
+    imp.sleep(0.2);
+    RESET.write(1); //Return reset to high, bootloader on Arduino now begins
+    imp.sleep(0.3);
+    check_duino();
+    ACTIVITY.write(1); //Turn off LED
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
-function burn(program) {
-    
-    bounce(function() {
-        server.log("Burning hex program to Arduino");
-        local startTime = hardware.millis.bindenv(hardware)();
-        foreach (line in program) {
-            program_duino(line.addr, line.data); //Takes 627ms
+function scan_serial() {
+    local ch = null;
+    local str = "";
+    do {
+        ch = SERIAL.read();
+        if (ch != -1 && ch != 0) {
+            str += format("%c", ch);
         }
-        // execute(STK_LEAVE_PROGMODE, null, 0);
-        server.log("Program time: " + format("%dms", hardware.millis.bindenv(hardware)() - startTime));
+    } while (ch != -1);
+    
+    if (str.len() > 0) {
+        server.log("Serial: " + str);
+    }
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
+function burn(pline) {
+    if ("first" in pline) {
+        server.log("Starting to burn");
+        SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS);
+        bounce();
+    } else if ("last" in pline) {
         server.log("Done!")
         agent.send("done", true);
-    })
+        SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
+    } else {
+        program_duino(pline.addr, pline.data);
+    }
 }
 
+
 //------------------------------------------------------------------------------------------------------------------------------
-bounce(function() {
-    agent.on("burn", burn);
-    agent.send("ready", true);
-})
+agent.on("burn", burn);
+agent.send("ready", true);
+SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
