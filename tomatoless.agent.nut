@@ -56,11 +56,6 @@ Step 3: Check out your Arduino<br/>
 </tr>
 </thead>
 <tbody id='link-text'>
-<tr>
-<td colspan=3>
-Please select a file.
-</td>
-</tr>
 </tbody>
 </table>
 </div>
@@ -80,24 +75,29 @@ function buildLinkRow(idx, fileLink) {
   $('#upload-button-'+idx).click({value: fileLink}, function(e) {
     uploadFile(e.data.value);
   });
-  $('#remove-button-'+idx).click({value: idx}, function(e) {
+  $('#remove-button-'+idx).click({value: idx, link: fileLink}, function(e) {
     $('#link-row-'+e.data.value).remove();
-    lastIndex--;
-    localStorage['lastIndex'] = lastIndex;
-    localStorage['link.' + (idx-1)];
+    links.splice(idx - 1, 1);
+    buildLinkTable();
   });
+}
+function buildLinkTable() {
+  $('#link-text').empty();
+  if( links.length > 0 ) {
+    for( var i=0; i < links.length; i++ ) {
+      buildLinkRow(i+1, links[i]);
+    } 
+    if( window.localStorage ) localStorage['links'] = JSON.stringify(links);
+  } else {
+    $('#link-text').append('<tr id=\'empty-row\'><td colspan=3>Please select a file.</td></tr>');
+  }
 }
 </script>
 <script type='text/javascript'>
 options = {
     success: function(files) {
-      if( lastIndex > 0 ) {
-        $('#link-text').empty();
-      }
-      lastIndex++;
-      localStorage['link.' + lastIndex] = files[0].link;
-      localStorage['lastIndex'] = lastIndex;
-      buildLinkRow(lastIndex, files[0].link);
+      links.push(files[0].link);
+      buildLinkTable();
     },
     cancel: function() {
 
@@ -109,16 +109,18 @@ options = {
 var button = Dropbox.createChooseButton(options);
 $('#dropbox-button').html(button);
 
-var lastIndexStr = localStorage['lastIndex'];
-var lastIndex = 0;
-if( !(lastIndexStr === undefined) ) {
-  lastIndex = parseInt(lastIndexStr);
-  $('#link-text').empty();
+var emptyRow;
+var links = [];
+if( window.localStorage ) {
+  var linksStr = localStorage['links'];
+  if( linksStr ) {
+    links = JSON.parse(linksStr);
+  }
+} else {
+  console.log('local storage not supported...');
 }
-for( var i=0; i < lastIndex+1; i++ ) {
-  var fileLink = localStorage['link.'+i];
-  buildLinkRow(i+1, fileLink);
-}
+buildLinkTable();
+
 </script>
 
 </BODY>
@@ -298,12 +300,11 @@ http.onrequest(function (req, res) {
                 server.log(log)
                 return res.send(200, "OK");
             } else if(req.headers["content-type"] == "application/x-www-form-urlencoded") {
-              //Handle form POST of Dropbox links
               server.log(req.body);
               local data = http.urldecode(req.body);
-              local url = data.hexfile;//Dropbox link
+              local url = data.hexfile;
               server.log("url: " + url);
-              local hex = http.get(url).sendsync();//Get File from Dropbox
+              local hex = http.get(url).sendsync();
               //server.log("hex: " + hex.body);
               device.on("done", function(ready) {
                   res.header("Location", http.agenturl());
