@@ -17,18 +17,111 @@ server.log("Agent started, URL is " + http.agenturl());
 
 const MAX_PROGRAM_SIZE = 0x20000;
 const ARDUINO_BLOB_SIZE = 128;
+
 program <- null;
 
 //------------------------------------------------------------------------------------------------------------------------------
-html <- @"<HTML>
+html <- @"
+<!doctype html>
+<HTML lang='en'>
+<head>
+<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+<!-- Bootstrap -->
+<!-- Latest compiled and minified CSS -->
+<link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css'>
+<!-- Optional theme -->
+<link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css'>
+</head>
 <BODY>
-
+<div class='container'>
+<h1>Program the ATmega328 via the Imp.</h1>
 <form method='POST' enctype='multipart/form-data'>
-Program the ATmega328 via the Imp.<br/><br/>
 Step 1: Select an Intel HEX file to upload: <input type=file name=hexfile><br/>
 Step 2: <input type=submit value=Press> to upload the file.<br/>
 Step 3: Check out your Arduino<br/>
 </form>
+<form method='POST' id='hex-upload-form'>
+<input type=hidden name=hexfile id='hex-file'>
+</form>
+<h2>OR</h2>
+<div class='panel panel-default'>
+<div class='panel-heading' id='dropbox-button'></div>
+<div class='panel-body'>
+<table class='table'>
+<thead>
+<tr>
+<th>#</th>
+<th>File Name</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id='link-text'>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<script src='//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script>
+<script src='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js'></script>
+<script type='text/javascript' src='//www.dropbox.com/static/api/2/dropins.js' id='dropboxjs' data-app-key='8jsgtlv8g2xgq9s'></script>
+<script type='text/javascript'>
+function uploadFile(fileLink) {
+  $('#hex-file').val(fileLink);
+  $('#hex-upload-form').submit();
+}
+function buildLinkRow(idx, fileLink) {
+  $('#link-text').append('<tr id=\'link-row-'+idx+'\'><td>'+idx+'</td><td>'+fileLink+'</td><td><button type=button id=upload-button-'+idx+' class=\'btn btn-default\'><span class=\'glyphicon glyphicon-upload\'></span></button><button type=button id=\'remove-button-'+idx+'\' class=\'btn btn-default\'><span class=\'glyphicon glyphicon-remove\'></span></button></td></tr>');
+  $('#upload-button-'+idx).click({value: fileLink}, function(e) {
+    uploadFile(e.data.value);
+  });
+  $('#remove-button-'+idx).click({value: idx, link: fileLink}, function(e) {
+    $('#link-row-'+e.data.value).remove();
+    links.splice(idx - 1, 1);
+    buildLinkTable();
+  });
+}
+function buildLinkTable() {
+  $('#link-text').empty();
+  if( links.length > 0 ) {
+    for( var i=0; i < links.length; i++ ) {
+      buildLinkRow(i+1, links[i]);
+    } 
+    if( window.localStorage ) localStorage['links'] = JSON.stringify(links);
+  } else {
+    $('#link-text').append('<tr id=\'empty-row\'><td colspan=3>Please select a file.</td></tr>');
+  }
+}
+</script>
+<script type='text/javascript'>
+options = {
+    success: function(files) {
+      links.push(files[0].link);
+      buildLinkTable();
+    },
+    cancel: function() {
+
+    },
+    linkType: 'direct',
+    multiselect: false, 
+    extensions: ['.hex']
+};
+var button = Dropbox.createChooseButton(options);
+$('#dropbox-button').html(button);
+
+var emptyRow;
+var links = [];
+if( window.localStorage ) {
+  var linksStr = localStorage['links'];
+  if( linksStr ) {
+    links = JSON.parse(linksStr);
+  }
+} else {
+  console.log('local storage not supported...');
+}
+buildLinkTable();
+
+</script>
 
 </BODY>
 </HTML>
@@ -206,7 +299,21 @@ http.onrequest(function (req, res) {
                 }
                 server.log(log)
                 return res.send(200, "OK");
-            } else {
+            } else if(req.headers["content-type"] == "application/x-www-form-urlencoded") {
+              server.log(req.body);
+              local data = http.urldecode(req.body);
+              local url = data.hexfile;
+              server.log("url: " + url);
+              local hex = http.get(url).sendsync();
+              //server.log("hex: " + hex.body);
+              device.on("done", function(ready) {
+                  res.header("Location", http.agenturl());
+                  res.send(302, "HEX file uploaded");                        
+                  server.log("Programming completed")
+              })
+              server.log("Programming started")
+              parse_hexfile(hex.body);              
+            } else {          
                 return res.send(400, "Bad request");
             }
         } else {

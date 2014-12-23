@@ -29,7 +29,7 @@ server.log("Device started, impee_id " + hardware.getimpeeid() + " and mac = " +
 //------------------------------------------------------------------------------------------------------------------------------
 // Uart57 for TX/RX
 SERIAL <- hardware.uart57;
-SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS);
+SERIAL.configure(19200, 8, PARITY_NONE, 1, NO_CTSRTS);
 
 // Set pin1 high for normal operation
 // Set pin1 low to reset a standard Arduino
@@ -268,7 +268,7 @@ function burn(pline) {
     } else if ("last" in pline) {
         server.log("Done!")
         agent.send("done", true);
-        SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
+        SERIAL.configure(19200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
     } else {
         program_duino(pline.addr, pline.data);
     }
@@ -278,4 +278,4 @@ function burn(pline) {
 //------------------------------------------------------------------------------------------------------------------------------
 agent.on("burn", burn);
 agent.send("ready", true);
-SERIAL.configure(115200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
+SERIAL.configure(19200, 8, PARITY_NONE, 1, NO_CTSRTS, scan_serial);
